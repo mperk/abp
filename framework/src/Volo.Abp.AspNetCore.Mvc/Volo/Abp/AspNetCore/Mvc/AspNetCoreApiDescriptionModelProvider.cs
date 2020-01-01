@@ -19,18 +19,18 @@ using Volo.Abp.Http.Modeling;
 
 namespace Volo.Abp.AspNetCore.Mvc
 {
-    public class AspNetCoreApiDescriptionModelProvider : IApiDescriptionModelProvider, ISingletonDependency
+    public class AspNetCoreApiDescriptionModelProvider : IApiDescriptionModelProvider, ITransientDependency
     {
         public ILogger<AspNetCoreApiDescriptionModelProvider> Logger { get; set; }
 
         private readonly IApiDescriptionGroupCollectionProvider _descriptionProvider;
         private readonly AbpAspNetCoreMvcOptions _options;
-        private readonly ApiDescriptionModelOptions _modelOptions;
+        private readonly AbpApiDescriptionModelOptions _modelOptions;
 
         public AspNetCoreApiDescriptionModelProvider(
             IApiDescriptionGroupCollectionProvider descriptionProvider,
             IOptions<AbpAspNetCoreMvcOptions> options,
-            IOptions<ApiDescriptionModelOptions> modelOptions)
+            IOptions<AbpApiDescriptionModelOptions> modelOptions)
         {
             _descriptionProvider = descriptionProvider;
             _options = options.Value;
@@ -79,12 +79,13 @@ namespace Volo.Abp.AspNetCore.Mvc
                 return;
             }
 
+            Logger.LogDebug($"ActionApiDescriptionModel.Create: {controllerModel.ControllerName}.{uniqueMethodName}");
             var actionModel = controllerModel.AddAction(uniqueMethodName, ActionApiDescriptionModel.Create(
                 uniqueMethodName,
                 method,
                 apiDescription.RelativePath,
                 apiDescription.HttpMethod,
-                setting?.ApiVersions.Select(v => v.ToString()).ToList() ?? new List<string>() //TODO: Also get from ApiVersion attributes if available..?
+                GetSupportedVersions(controllerType, method, setting)
             ));
 
             AddParameterDescriptionsToModel(actionModel, method, apiDescription);
@@ -123,6 +124,29 @@ namespace Volo.Abp.AspNetCore.Mvc
             }
 
             return methodNameBuilder.ToString();
+        }
+
+        private static List<string> GetSupportedVersions(Type controllerType, MethodInfo method, ConventionalControllerSetting setting)
+        {
+            var supportedVersions = new List<ApiVersion>();
+
+            var mapToAttributes = method.GetCustomAttributes<MapToApiVersionAttribute>().ToArray();
+            if (mapToAttributes.Any())
+            {
+                supportedVersions.AddRange(
+                    mapToAttributes.SelectMany(a => a.Versions)
+                );
+            }
+            else
+            {
+                supportedVersions.AddRange(
+                    controllerType.GetCustomAttributes<ApiVersionAttribute>().SelectMany(a => a.Versions)
+                );
+
+                setting?.ApiVersions.ForEach(supportedVersions.Add);
+            }
+
+            return supportedVersions.Select(v => v.ToString()).Distinct().ToList();
         }
 
         private void AddParameterDescriptionsToModel(ActionApiDescriptionModel actionModel, MethodInfo method, ApiDescription apiDescription)

@@ -7,15 +7,18 @@ using Volo.Blogging.Comments.Dtos;
 
 namespace Volo.Blogging.Areas.Blog.Controllers
 {
+    //TODO: Is that being used?
+
     [Area("Blog")]
     [Route("Blog/[controller]/[action]")]
-    public class CommentsController : AbpController
+    public class CommentsController : BloggingControllerBase
     {
         private readonly ICommentAppService _commentAppService;
 
         public CommentsController(ICommentAppService commentAppService)
         {
             _commentAppService = commentAppService;
+
         }
 
         [HttpPost]

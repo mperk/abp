@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -8,40 +7,47 @@ using Volo.Abp.Http.Modeling;
 using Volo.Abp.Http.ProxyScripting.Configuration;
 using Volo.Abp.Http.ProxyScripting.Generators;
 using Volo.Abp.Json;
+using Volo.Abp.Minify.Scripts;
 
 namespace Volo.Abp.Http.ProxyScripting
 {
-    public class ProxyScriptManager : IProxyScriptManager, ISingletonDependency
+    public class ProxyScriptManager : IProxyScriptManager, ITransientDependency
     {
         private readonly IApiDescriptionModelProvider _modelProvider;
-        private readonly AbpApiProxyScriptingOptions _options;
         private readonly IServiceProvider _serviceProvider;
         private readonly IJsonSerializer _jsonSerializer;
-
-        private readonly ConcurrentDictionary<string, string> _cache;
+        private readonly IProxyScriptManagerCache _cache;
+        private readonly AbpApiProxyScriptingOptions _options;
+        private readonly IJavascriptMinifier _javascriptMinifier;
 
         public ProxyScriptManager(
             IApiDescriptionModelProvider modelProvider, 
-            IOptions<AbpApiProxyScriptingOptions> options,
             IServiceProvider serviceProvider,
-            IJsonSerializer jsonSerializer)
+            IJsonSerializer jsonSerializer,
+            IProxyScriptManagerCache cache,
+            IOptions<AbpApiProxyScriptingOptions> options, 
+            IJavascriptMinifier javascriptMinifier)
         {
             _modelProvider = modelProvider;
-            _options = options.Value;
             _serviceProvider = serviceProvider;
             _jsonSerializer = jsonSerializer;
-
-            _cache = new ConcurrentDictionary<string, string>();
+            _cache = cache;
+            _javascriptMinifier = javascriptMinifier;
+            _options = options.Value;
         }
 
         public string GetScript(ProxyScriptingModel scriptingModel)
         {
+            var cacheKey = CreateCacheKey(scriptingModel);
+
             if (scriptingModel.UseCache)
             {
-                return _cache.GetOrAdd(CreateCacheKey(scriptingModel), (key) => CreateScript(scriptingModel));
+                return _cache.GetOrAdd(cacheKey, () => CreateScript(scriptingModel));
             }
 
-            return _cache[CreateCacheKey(scriptingModel)] = CreateScript(scriptingModel);
+            var script = CreateScript(scriptingModel);
+            _cache.Set(cacheKey, script);
+            return script;
         }
 
         private string CreateScript(ProxyScriptingModel scriptingModel)
@@ -61,7 +67,8 @@ namespace Volo.Abp.Http.ProxyScripting
 
             using (var scope = _serviceProvider.CreateScope())
             {
-                return scope.ServiceProvider.GetRequiredService(generatorType).As<IProxyScriptGenerator>().CreateScript(apiModel);
+                var script = scope.ServiceProvider.GetRequiredService(generatorType).As<IProxyScriptGenerator>().CreateScript(apiModel);
+                return scriptingModel.Minify ? _javascriptMinifier.Minify(script) : script;
             }
         }
 

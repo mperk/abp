@@ -11,27 +11,32 @@ namespace Volo.Abp.Identity.EntityFrameworkCore
 {
     public class EfCoreIdentityClaimTypeRepository : EfCoreRepository<IIdentityDbContext, IdentityClaimType, Guid>, IIdentityClaimTypeRepository
     {
-        public EfCoreIdentityClaimTypeRepository(IDbContextProvider<IIdentityDbContext> dbContextProvider) : base(dbContextProvider)
+        public EfCoreIdentityClaimTypeRepository(IDbContextProvider<IIdentityDbContext> dbContextProvider) 
+            : base(dbContextProvider)
         {
+
         }
 
-        public async Task<bool> DoesNameExist(string name, Guid? claimTypeId = null)
+        public async Task<bool> AnyAsync(string name, Guid? ignoredId = null)
         {
-            return await DbSet.WhereIf(claimTypeId != null, ct => ct.Id != claimTypeId).CountAsync(ct => ct.Name == name) > 0;
+            return await DbSet
+                       .WhereIf(ignoredId != null, ct => ct.Id != ignoredId)
+                       .CountAsync(ct => ct.Name == name) > 0;
         }
 
-        public async Task<List<IdentityClaimType>> GetListAsync(string sorting, int maxResultCount, int skipCount)
+        public async Task<List<IdentityClaimType>> GetListAsync(string sorting, int maxResultCount, int skipCount, string filter)
         {
-            var identityClaimTypes = await DbSet.OrderBy(sorting ?? "name desc")
+            var identityClaimTypes = await DbSet
+                .WhereIf(
+                    !filter.IsNullOrWhiteSpace(),
+                    u =>
+                        u.Name.Contains(filter)
+                )
+                .OrderBy(sorting ?? "name desc")
                 .PageBy(skipCount, maxResultCount)
                 .ToListAsync();
 
             return identityClaimTypes;
-        }
-
-        public async Task<int> GetTotalCount()
-        {
-            return await DbSet.CountAsync();
         }
     }
 }

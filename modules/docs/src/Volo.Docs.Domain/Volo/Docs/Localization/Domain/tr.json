@@ -3,12 +3,18 @@
   "texts": {
     "Documents": "Dökümanlar",
     "BackToWebsite": "Ana sayafaya dön",
+    "Contributors": "Katkıda bulunanlar",
+    "ShareOn": "Paylaş",
     "Version": "Versiyon",
     "Edit": "Düzenle",
+    "Delete": "Sil",
     "InThisDocument": "Bu dökümanda",
     "GoToTop": "En üste çık",
     "Projects": "Proje(ler)",
     "NoProjectWarning": "Hiç proje yok!",
-    "DocumentNotFound": "Aradığınız döküman bulunamadı!"
+    "DocumentNotFound": "Aradığınız döküman bulunamadı!",
+    "NavigationDocumentNotFound": "Bu döküman için menü bulunamadı!",
+    "DocumentNotFoundInSelectedLanguage": "İstediğiniz dilde belge bulunamadı. Varsayılan dilde belge gösterilir.",
+    "MultipleVersionDocumentInfo": "Bu dökümanın birden çok versiyonu bulunmaktadır. Sizin için en uygun olan seçenekleri seçiniz."
   }
 }

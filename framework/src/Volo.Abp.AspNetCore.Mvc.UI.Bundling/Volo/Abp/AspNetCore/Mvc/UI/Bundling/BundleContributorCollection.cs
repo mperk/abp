@@ -1,28 +1,33 @@
-﻿using System;
+﻿using JetBrains.Annotations;
+using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
-using JetBrains.Annotations;
 using Volo.Abp.Modularity;
 
 namespace Volo.Abp.AspNetCore.Mvc.UI.Bundling
 {
     public class BundleContributorCollection
     {
-        private readonly List<BundleContributor> _contributors;
+        private readonly List<IBundleContributor> _contributors;
 
         public BundleContributorCollection()
         {
-            _contributors = new List<BundleContributor>();
+            _contributors = new List<IBundleContributor>();
         }
 
-        public void Add(BundleContributor contributor)
+        public void Add(IBundleContributor contributor)
         {
+            foreach (var dependedType in GetDirectDependencies(contributor.GetType()))
+            {
+                AddWithDependencies(dependedType);
+            }
+
             _contributors.Add(contributor);
         }
 
         public void Add<TContributor>()
-            where TContributor : BundleContributor, new()
+            where TContributor : IBundleContributor, new()
         {
             Add(typeof(TContributor));
         }
@@ -34,14 +39,9 @@ namespace Volo.Abp.AspNetCore.Mvc.UI.Bundling
             AddWithDependencies(contributorType);
         }
 
-        public IReadOnlyList<BundleContributor> GetAll()
+        public IReadOnlyList<IBundleContributor> GetAll()
         {
             return _contributors.ToImmutableList();
-        }
-
-        private bool IsAlreadyAdded(Type contributorType)
-        {
-            return _contributors.Any(c => c.GetType() == contributorType);
         }
 
         private void AddWithDependencies(Type contributorType)
@@ -51,32 +51,40 @@ namespace Volo.Abp.AspNetCore.Mvc.UI.Bundling
                 return;
             }
 
-            var dependsOnAttributes = contributorType
-                .GetCustomAttributes(true)
-                .OfType<IDependedTypesProvider>()
-                .ToList();
-
-            foreach (var dependsOnAttribute in dependsOnAttributes)
+            foreach (var dependedType in GetDirectDependencies(contributorType))
             {
-                foreach (var dependedType in dependsOnAttribute.GetDependedTypes())
-                {
-                    AddWithDependencies(dependedType); //Recursive call
-                }
+                AddWithDependencies(dependedType); //Recursive call
             }
 
             AddInstanceToContributors(contributorType);
         }
 
+        private IEnumerable<Type> GetDirectDependencies(Type contributorType)
+        {
+            var dependsOnAttributes = contributorType
+                .GetCustomAttributes(true)
+                .OfType<IDependedTypesProvider>()
+                .ToList();
+
+            return dependsOnAttributes
+                .SelectMany(a => a.GetDependedTypes());
+        }
+
+        private bool IsAlreadyAdded(Type contributorType)
+        {
+            return _contributors.Any(c => c.GetType() == contributorType);
+        }
+
         private void AddInstanceToContributors(Type contributorType)
         {
-            if (!typeof(BundleContributor).IsAssignableFrom(contributorType))
+            if (!typeof(IBundleContributor).IsAssignableFrom(contributorType))
             {
-                throw new AbpException($"Given {nameof(contributorType)} ({contributorType.AssemblyQualifiedName}) should implement the {typeof(BundleContributor).AssemblyQualifiedName} interface!");
+                throw new AbpException($"Given {nameof(contributorType)} ({contributorType.AssemblyQualifiedName}) should implement the {typeof(IBundleContributor).AssemblyQualifiedName} interface!");
             }
 
             try
             {
-                _contributors.Add((BundleContributor)Activator.CreateInstance(contributorType));
+                _contributors.Add((IBundleContributor)Activator.CreateInstance(contributorType));
             }
             catch (Exception ex)
             {

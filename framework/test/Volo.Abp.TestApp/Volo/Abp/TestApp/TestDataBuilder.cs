@@ -17,27 +17,36 @@ namespace Volo.Abp.TestApp
 
         private readonly IBasicRepository<Person, Guid> _personRepository;
         private readonly ICityRepository _cityRepository;
+        private readonly IRepository<EntityWithIntPk, int> _entityWithIntPksRepository;
 
         public TestDataBuilder(
             IBasicRepository<Person, Guid> personRepository, 
-            ICityRepository cityRepository)
+            ICityRepository cityRepository,
+            IRepository<EntityWithIntPk, int> entityWithIntPksRepository)
         {
             _personRepository = personRepository;
             _cityRepository = cityRepository;
+            _entityWithIntPksRepository = entityWithIntPksRepository;
         }
 
         public void Build()
         {
             AddCities();
             AddPeople();
+            AddEntitiesWithPks();
         }
 
         private void AddCities()
         {
+            var istanbul = new City(IstanbulCityId, "Istanbul");
+            istanbul.Districts.Add(new District(istanbul.Id, "Bakirkoy", 1283999));
+            istanbul.Districts.Add(new District(istanbul.Id, "Mecidiyeköy", 2222321));
+            istanbul.Districts.Add(new District(istanbul.Id, "Uskudar", 726172));
+
             _cityRepository.Insert(new City(Guid.NewGuid(), "Tokyo"));
             _cityRepository.Insert(new City(Guid.NewGuid(), "Madrid"));
-            _cityRepository.Insert(new City(LondonCityId, "London"));
-            _cityRepository.Insert(new City(IstanbulCityId, "Istanbul"));
+            _cityRepository.Insert(new City(LondonCityId, "London") {ExtraProperties = { { "Population", 10_470_000 } } });
+            _cityRepository.Insert(istanbul);
             _cityRepository.Insert(new City(Guid.NewGuid(), "Paris"));
             _cityRepository.Insert(new City(Guid.NewGuid(), "Washington"));
             _cityRepository.Insert(new City(Guid.NewGuid(), "Sao Paulo"));
@@ -62,6 +71,11 @@ namespace Volo.Abp.TestApp
 
             _personRepository.Insert(tenant1Person1);
             _personRepository.Insert(tenant1Person2);
+        }
+
+        private void AddEntitiesWithPks()
+        {
+            _entityWithIntPksRepository.Insert(new EntityWithIntPk("Entity1"));
         }
     }
 }

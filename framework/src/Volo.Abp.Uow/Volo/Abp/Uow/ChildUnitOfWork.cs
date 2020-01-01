@@ -9,11 +9,15 @@ namespace Volo.Abp.Uow
     {
         public Guid Id => _parent.Id;
 
-        public IUnitOfWorkOptions Options => _parent.Options;
+        public IAbpUnitOfWorkOptions Options => _parent.Options;
 
         public IUnitOfWork Outer => _parent.Outer;
 
         public bool IsReserved => _parent.IsReserved;
+
+        public bool IsDisposed => _parent.IsDisposed;
+
+        public bool IsCompleted => _parent.IsCompleted;
 
         public string ReservationName => _parent.ReservationName;
 
@@ -39,7 +43,7 @@ namespace Volo.Abp.Uow
             _parent.SetOuter(outer);
         }
 
-        public void Initialize(UnitOfWorkOptions options)
+        public void Initialize(AbpUnitOfWorkOptions options)
         {
             _parent.Initialize(options);
         }

@@ -8,7 +8,7 @@ using Volo.Abp.UI;
 
 namespace Volo.Abp.TenantManagement
 {
-    [DependsOn(typeof(AbpMultiTenancyAbstractionsModule))]
+    [DependsOn(typeof(AbpMultiTenancyModule))]
     [DependsOn(typeof(AbpTenantManagementDomainSharedModule))]
     [DependsOn(typeof(AbpDataModule))]
     [DependsOn(typeof(AbpDddDomainModule))]
@@ -18,7 +18,8 @@ namespace Volo.Abp.TenantManagement
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
-            context.Services.Configure<AbpAutoMapperOptions>(options =>
+            context.Services.AddAutoMapperObjectMapper<AbpTenantManagementDomainModule>();
+            Configure<AbpAutoMapperOptions>(options =>
             {
                 options.AddProfile<AbpTenantManagementDomainMappingProfile>(validate: true);
             });

@@ -2,11 +2,11 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Volo.Abp.AspNetCore.Mvc.UI.RazorPages;
+using Volo.Abp.Domain.Entities;
 
 namespace Volo.Abp.Identity.Web.Pages.Identity.Roles
 {
-    public class EditModalModel : AbpPageModel
+    public class EditModalModel : IdentityPageModel
     {
         [BindProperty]
         public RoleInfoModel Role { get; set; }
@@ -35,15 +35,26 @@ namespace Volo.Abp.Identity.Web.Pages.Identity.Roles
             return NoContent();
         }
 
-        public class RoleInfoModel
+        public class RoleInfoModel : IHasConcurrencyStamp
         {
             [HiddenInput]
             public Guid Id { get; set; }
+
+            [HiddenInput]
+            public string ConcurrencyStamp { get; set; }
 
             [Required]
             [StringLength(IdentityRoleConsts.MaxNameLength)]
             [Display(Name = "DisplayName:RoleName")]
             public string Name { get; set; }
+
+            [Display(Name = "DisplayName:IsDefault")]
+            public bool IsDefault { get; set; }
+
+            public bool IsStatic { get; set; }
+
+            [Display(Name = "DisplayName:IsPublic")]
+            public bool IsPublic { get; set; }
         }
     }
 }

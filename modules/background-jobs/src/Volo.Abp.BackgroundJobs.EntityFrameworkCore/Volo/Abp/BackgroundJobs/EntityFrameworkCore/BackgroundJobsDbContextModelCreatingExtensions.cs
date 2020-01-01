@@ -12,7 +12,10 @@ namespace Volo.Abp.BackgroundJobs.EntityFrameworkCore
         {
             Check.NotNull(builder, nameof(builder));
 
-            var options = new BackgroundJobsModelBuilderConfigurationOptions();
+            var options = new BackgroundJobsModelBuilderConfigurationOptions(
+                BackgroundJobsDbProperties.DbTablePrefix,
+                BackgroundJobsDbProperties.DbSchema
+            );
 
             optionsAction?.Invoke(options);
             
@@ -21,6 +24,7 @@ namespace Volo.Abp.BackgroundJobs.EntityFrameworkCore
                 b.ToTable(options.TablePrefix + "BackgroundJobs", options.Schema);
 
                 b.ConfigureCreationTime();
+                b.ConfigureExtraProperties();
 
                 b.Property(x => x.JobName).IsRequired().HasMaxLength(BackgroundJobRecordConsts.MaxJobNameLength);
                 b.Property(x => x.JobArgs).IsRequired().HasMaxLength(BackgroundJobRecordConsts.MaxJobArgsLength);

@@ -6,10 +6,11 @@ using Volo.Abp.AspNetCore.Mvc.UI.Bootstrap.TagHelpers.Form;
 using Volo.Abp.AspNetCore.Mvc.UI.RazorPages;
 using Volo.Blogging.Blogs;
 using Volo.Blogging.Blogs.Dtos;
+using Volo.Blogging.Pages.Blog;
 
 namespace Volo.Blogging.Pages.Admin.Blogs
 {
-    public class CreateModel : AbpPageModel
+    public class CreateModel : BloggingPageModel
     {
         private readonly IBlogAppService _blogAppService;
         private readonly IAuthorizationService _authorization;
@@ -33,11 +34,13 @@ namespace Volo.Blogging.Pages.Admin.Blogs
             return Page();
         }
 
-        public async void OnPostAsync()
+        public async Task<IActionResult> OnPostAsync()
         {
-            var language = ObjectMapper.Map<BlogCreateModalView, CreateBlogDto>(Blog);
+            var blogDto = ObjectMapper.Map<BlogCreateModalView, CreateBlogDto>(Blog);
 
-            await _blogAppService.Create(language);
+            await _blogAppService.Create(blogDto);
+
+            return NoContent();
         }
 
 

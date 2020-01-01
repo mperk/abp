@@ -1,15 +1,15 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Application.Dtos;
 using Volo.Abp.AspNetCore.Mvc;
-using Volo.Abp.PermissionManagement;
 
 namespace Volo.Abp.Identity
 {
     [RemoteService]
     [Area("identity")]
     [ControllerName("User")]
+    [Route("api/identity/users")]
     public class IdentityUserController : AbpController, IIdentityUserAppService
     {
         private readonly IIdentityUserAppService _userAppService;
@@ -19,66 +19,65 @@ namespace Volo.Abp.Identity
             _userAppService = userAppService;
         }
 
+        [HttpGet]
+        [Route("{id}")]
         public virtual Task<IdentityUserDto> GetAsync(Guid id)
         {
             return _userAppService.GetAsync(id);
         }
 
+        [HttpGet]
         public virtual Task<PagedResultDto<IdentityUserDto>> GetListAsync(GetIdentityUsersInput input)
         {
             return _userAppService.GetListAsync(input);
         }
 
+        [HttpPost]
         public virtual Task<IdentityUserDto> CreateAsync(IdentityUserCreateDto input)
         {
             return _userAppService.CreateAsync(input);
         }
 
+        [HttpPut]
+        [Route("{id}")]
         public virtual Task<IdentityUserDto> UpdateAsync(Guid id, IdentityUserUpdateDto input)
         {
             return _userAppService.UpdateAsync(id, input);
         }
 
+        [HttpDelete]
+        [Route("{id}")]
         public virtual Task DeleteAsync(Guid id)
         {
             return _userAppService.DeleteAsync(id);
         }
 
+        [HttpGet]
+        [Route("{id}/roles")]
         public virtual Task<ListResultDto<IdentityRoleDto>> GetRolesAsync(Guid id)
         {
             return _userAppService.GetRolesAsync(id);
         }
 
+        [HttpPut]
+        [Route("{id}/roles")]
         public virtual Task UpdateRolesAsync(Guid id, IdentityUserUpdateRolesDto input)
         {
             return _userAppService.UpdateRolesAsync(id, input);
         }
 
-        public virtual Task<GetPermissionListResultDto> GetPermissionsAsync(Guid id)
-        {
-            return _userAppService.GetPermissionsAsync(id);
-        }
-
-        public virtual Task UpdatePermissionsAsync(Guid id, UpdatePermissionsDto input)
-        {
-            return _userAppService.UpdatePermissionsAsync(id, input);
-        }
-
         [HttpGet]
+        [Route("by-username/{userName}")]
         public virtual Task<IdentityUserDto> FindByUsernameAsync(string username)
         {
             return _userAppService.FindByUsernameAsync(username);
         }
 
         [HttpGet]
+        [Route("by-email/{email}")]
         public virtual Task<IdentityUserDto> FindByEmailAsync(string email)
         {
             return _userAppService.FindByEmailAsync(email);
-        }
-
-        public Task ChangePasswordAsync(string currentPassword, string newPassword)
-        {
-            return _userAppService.ChangePasswordAsync(currentPassword, newPassword);
         }
     }
 }

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -23,29 +24,32 @@ namespace Volo.Abp.BackgroundJobs.RabbitMQ
         
         public ILogger<JobQueue<TArgs>> Logger { get; set; }
 
-        protected BackgroundJobOptions BackgroundJobOptions { get; }
-        protected RabbitMqBackgroundJobOptions RabbitMqBackgroundJobOptions { get; }
+        protected AbpBackgroundJobOptions AbpBackgroundJobOptions { get; }
+        protected AbpRabbitMqBackgroundJobOptions AbpRabbitMqBackgroundJobOptions { get; }
         protected IChannelPool ChannelPool { get; }
         protected IRabbitMqSerializer Serializer { get; }
         protected IBackgroundJobExecuter JobExecuter { get; }
+        protected IServiceScopeFactory ServiceScopeFactory { get; }
 
-        protected AsyncLock SyncObj = new AsyncLock();
+        protected SemaphoreSlim SyncObj = new SemaphoreSlim(1, 1);
         protected bool IsDiposed { get; private set; }
 
         public JobQueue(
-            IOptions<BackgroundJobOptions> backgroundJobOptions,
-            IOptions<RabbitMqBackgroundJobOptions> rabbitMqBackgroundJobOptions,
+            IOptions<AbpBackgroundJobOptions> backgroundJobOptions,
+            IOptions<AbpRabbitMqBackgroundJobOptions> rabbitMqAbpBackgroundJobOptions,
             IChannelPool channelPool,
             IRabbitMqSerializer serializer,
-            IBackgroundJobExecuter jobExecuter)
+            IBackgroundJobExecuter jobExecuter,
+            IServiceScopeFactory serviceScopeFactory)
         {
-            BackgroundJobOptions = backgroundJobOptions.Value;
-            RabbitMqBackgroundJobOptions = rabbitMqBackgroundJobOptions.Value;
+            AbpBackgroundJobOptions = backgroundJobOptions.Value;
+            AbpRabbitMqBackgroundJobOptions = rabbitMqAbpBackgroundJobOptions.Value;
             Serializer = serializer;
             JobExecuter = jobExecuter;
+            ServiceScopeFactory = serviceScopeFactory;
             ChannelPool = channelPool;
 
-            JobConfiguration = BackgroundJobOptions.GetJob(typeof(TArgs));
+            JobConfiguration = AbpBackgroundJobOptions.GetJob(typeof(TArgs));
             QueueConfiguration = GetOrCreateJobQueueConfiguration();
 
             Logger = NullLogger<JobQueue<TArgs>>.Instance;
@@ -53,10 +57,10 @@ namespace Volo.Abp.BackgroundJobs.RabbitMQ
 
         protected virtual JobQueueConfiguration GetOrCreateJobQueueConfiguration()
         {
-            return RabbitMqBackgroundJobOptions.JobQueues.GetOrDefault(typeof(TArgs)) ??
+            return AbpRabbitMqBackgroundJobOptions.JobQueues.GetOrDefault(typeof(TArgs)) ??
                    new JobQueueConfiguration(
                        typeof(TArgs),
-                       RabbitMqBackgroundJobOptions.DefaultQueueNamePrefix + JobConfiguration.JobName
+                       AbpRabbitMqBackgroundJobOptions.DefaultQueueNamePrefix + JobConfiguration.JobName
                    );
         }
 
@@ -81,7 +85,7 @@ namespace Volo.Abp.BackgroundJobs.RabbitMQ
         {
             CheckDisposed();
 
-            if (!BackgroundJobOptions.IsJobExecutionEnabled)
+            if (!AbpBackgroundJobOptions.IsJobExecutionEnabled)
             {
                 return;
             }
@@ -125,7 +129,7 @@ namespace Volo.Abp.BackgroundJobs.RabbitMQ
             var result = QueueConfiguration.Declare(ChannelAccessor.Channel);
             Logger.LogDebug($"RabbitMQ Queue '{QueueConfiguration.QueueName}' has {result.MessageCount} messages and {result.ConsumerCount} consumers.");
 
-            if (BackgroundJobOptions.IsJobExecutionEnabled)
+            if (AbpBackgroundJobOptions.IsJobExecutionEnabled)
             {
                 Consumer = new EventingBasicConsumer(ChannelAccessor.Channel);
                 Consumer.Received += MessageReceived;
@@ -167,25 +171,29 @@ namespace Volo.Abp.BackgroundJobs.RabbitMQ
 
         protected virtual void MessageReceived(object sender, BasicDeliverEventArgs ea)
         {
-            var context = new JobExecutionContext(
-                JobConfiguration.JobType,
-                Serializer.Deserialize(ea.Body, typeof(TArgs))
-            );
+            using (var scope = ServiceScopeFactory.CreateScope())
+            {
+                var context = new JobExecutionContext(
+                    scope.ServiceProvider,
+                    JobConfiguration.JobType,
+                    Serializer.Deserialize(ea.Body, typeof(TArgs))
+                );
 
-            try
-            {
-                JobExecuter.Execute(context);
-                ChannelAccessor.Channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
-            }
-            catch (BackgroundJobExecutionException)
-            {
-                //TODO: Reject like that?
-                ChannelAccessor.Channel.BasicReject(deliveryTag: ea.DeliveryTag, requeue: true);
-            }
-            catch (Exception)
-            {
-                //TODO: Reject like that?
-                ChannelAccessor.Channel.BasicReject(deliveryTag: ea.DeliveryTag, requeue: false);
+                try
+                {
+                    JobExecuter.Execute(context);
+                    ChannelAccessor.Channel.BasicAck(deliveryTag: ea.DeliveryTag, multiple: false);
+                }
+                catch (BackgroundJobExecutionException)
+                {
+                    //TODO: Reject like that?
+                    ChannelAccessor.Channel.BasicReject(deliveryTag: ea.DeliveryTag, requeue: true);
+                }
+                catch (Exception)
+                {
+                    //TODO: Reject like that?
+                    ChannelAccessor.Channel.BasicReject(deliveryTag: ea.DeliveryTag, requeue: false);
+                }
             }
         }
 

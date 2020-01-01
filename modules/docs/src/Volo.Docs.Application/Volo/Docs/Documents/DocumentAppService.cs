@@ -2,97 +2,170 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Caching.Distributed;
-using Volo.Abp.Application.Services;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using Volo.Abp.Caching;
 using Volo.Docs.Projects;
 
 namespace Volo.Docs.Documents
 {
-    public class DocumentAppService : ApplicationService, IDocumentAppService
+    public class DocumentAppService : DocsAppServiceBase, IDocumentAppService
     {
         private readonly IProjectRepository _projectRepository;
-        private readonly IDistributedCache<List<string>> _distributedCache;
         private readonly IDocumentStoreFactory _documentStoreFactory;
-
+        protected IDistributedCache<DocumentWithDetailsDto> DocumentCache { get; }
+        protected IDistributedCache<LanguageConfig> LanguageCache { get; }
+        protected IDistributedCache<DocumentResourceDto> ResourceCache { get; }
+        protected IHostEnvironment HostEnvironment { get; }
         public DocumentAppService(
             IProjectRepository projectRepository,
-            IDistributedCache<List<string>> distributedCache,
-            IDocumentStoreFactory documentStoreFactory)
+            IDocumentStoreFactory documentStoreFactory,
+            IDistributedCache<DocumentWithDetailsDto> documentCache,
+            IDistributedCache<LanguageConfig> languageCache,
+            IDistributedCache<DocumentResourceDto> resourceCache, 
+            IHostEnvironment hostEnvironment)
         {
             _projectRepository = projectRepository;
-            _distributedCache = distributedCache;
             _documentStoreFactory = documentStoreFactory;
+            DocumentCache = documentCache;
+            LanguageCache = languageCache;
+            ResourceCache = resourceCache;
+            HostEnvironment = hostEnvironment;
         }
 
-        public async Task<DocumentWithDetailsDto> GetByNameAsync(string projectShortName, string documentName, string version, bool normalize)
+        public virtual async Task<DocumentWithDetailsDto> GetAsync(GetDocumentInput input)
         {
-            var project = await _projectRepository.FindByShortNameAsync(projectShortName);
+            var project = await _projectRepository.GetAsync(input.ProjectId);
 
-            return await GetDocument(ObjectMapper.Map<Project, ProjectDto>(project), documentName, version, normalize);
+            return await GetDocumentWithDetailsDtoAsync(
+                project,
+                input.Name,
+                input.LanguageCode,
+                input.Version
+            );
         }
 
-        public async Task<NavigationWithDetailsDto> GetNavigationDocumentAsync(string projectShortName, string version, bool normalize)
+        public virtual async Task<DocumentWithDetailsDto> GetDefaultAsync(GetDefaultDocumentInput input)
         {
-            var project = await _projectRepository.FindByShortNameAsync(projectShortName);
+            var project = await _projectRepository.GetAsync(input.ProjectId);
 
-            return ObjectMapper.Map<DocumentWithDetailsDto, NavigationWithDetailsDto>(
-                await GetDocument(ObjectMapper.Map<Project, ProjectDto>(project), project.NavigationDocumentName,
-                    version, normalize));
+            return await GetDocumentWithDetailsDtoAsync(
+                project,
+                project.DefaultDocumentName + "." + project.Format,
+                input.LanguageCode,
+                input.Version
+            );
         }
 
-        public async Task<DocumentWithDetailsDto> GetDocument(ProjectDto project, string documentName, string version, bool normalize)
+        public virtual async Task<DocumentWithDetailsDto> GetNavigationAsync(GetNavigationDocumentInput input)
         {
-            if (project == null)
+            var project = await _projectRepository.GetAsync(input.ProjectId);
+
+            return await GetDocumentWithDetailsDtoAsync(
+                project,
+                project.NavigationDocumentName,
+                input.LanguageCode,
+                input.Version
+            );
+        }
+
+        public async Task<DocumentResourceDto> GetResourceAsync(GetDocumentResourceInput input)
+        {
+            var project = await _projectRepository.GetAsync(input.ProjectId);
+            var cacheKey = $"Resource@{project.ShortName}#{input.LanguageCode}#{input.Name}#{input.Version}";
+            input.Version = string.IsNullOrWhiteSpace(input.Version) ? project.LatestVersionBranchName : input.Version;
+
+            async Task<DocumentResourceDto> GetResourceAsync()
             {
-                throw new ArgumentNullException(nameof(project));
+                var store = _documentStoreFactory.Create(project.DocumentStoreType);
+                var documentResource = await store.GetResource(project, input.Name, input.LanguageCode, input.Version);
+
+                return ObjectMapper.Map<DocumentResource, DocumentResourceDto>(documentResource);
             }
 
-            if (string.IsNullOrWhiteSpace(documentName))
+            if (HostEnvironment.IsDevelopment())
             {
-                documentName = project.DefaultDocumentName;
+                return await GetResourceAsync();
             }
 
-            IDocumentStore documentStore = _documentStoreFactory.Create(project.DocumentStoreType);
-
-            Document document = await documentStore.FindDocumentByNameAsync(project.ExtraProperties, project.Format, documentName, version);
-
-            var dto = ObjectMapper.Map<Document, DocumentWithDetailsDto>(document);
-
-            dto.Project = project;
-
-            return dto;
+            return await ResourceCache.GetOrAddAsync(
+                cacheKey,
+                GetResourceAsync,
+                () => new DistributedCacheEntryOptions
+                {
+                    //TODO: Configurable?
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(6),
+                    SlidingExpiration = TimeSpan.FromMinutes(30)
+                }
+            );
         }
 
-        public async Task<List<string>> GetVersions(string projectShortName, string defaultDocumentName, Dictionary<string, object> projectExtraProperties,
-            string documentStoreType, string documentName)
+        public async Task<DocumentParametersDto> GetParametersAsync(GetParametersDocumentInput input)
         {
-            if (string.IsNullOrWhiteSpace(documentName))
+            var project = await _projectRepository.GetAsync(input.ProjectId);
+
+            try
             {
-                documentName = defaultDocumentName;
+                var document = await GetDocumentWithDetailsDtoAsync(
+                    project,
+                    project.ParametersDocumentName,
+                    input.LanguageCode,
+                    input.Version
+                );
+
+                return JsonConvert.DeserializeObject<DocumentParametersDto>(document.Content);
+            }
+            catch (DocumentNotFoundException)
+            {
+                Logger.LogWarning($"Parameter file ({project.ParametersDocumentName}) not found.");
+                return new DocumentParametersDto();
+            }
+        }
+
+        protected virtual async Task<DocumentWithDetailsDto> GetDocumentWithDetailsDtoAsync(
+            Project project,
+            string documentName,
+            string languageCode,
+            string version)
+        {
+            version = string.IsNullOrWhiteSpace(version) ? project.LatestVersionBranchName : version;
+
+            var cacheKey = $"Document@{project.ShortName}#{languageCode}#{documentName}#{version}";
+
+            async Task<DocumentWithDetailsDto> GetDocumentAsync()
+            {
+                Logger.LogInformation($"Not found in the cache. Requesting {documentName} from the store...");
+                var store = _documentStoreFactory.Create(project.DocumentStoreType);
+                var document = await store.GetDocumentAsync(project, documentName, languageCode, version);
+                Logger.LogInformation($"Document retrieved: {documentName}");
+                return CreateDocumentWithDetailsDto(project, document);
             }
 
-            var documentStore = _documentStoreFactory.Create(documentStoreType);
-
-            var versions = await GetVersionsFromCache(projectShortName);
-
-            if (versions == null)
+            if (HostEnvironment.IsDevelopment())
             {
-                versions = await documentStore.GetVersions(projectExtraProperties, documentName);
-                await SetVersionsToCache(projectShortName, versions);
+                return await GetDocumentAsync();
             }
 
-            return versions;
+            return await DocumentCache.GetOrAddAsync(
+                cacheKey,
+                GetDocumentAsync,
+                () => new DistributedCacheEntryOptions
+                {
+                    //TODO: Configurable?
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(2),
+                    SlidingExpiration = TimeSpan.FromMinutes(30)
+                }
+            );
         }
 
-        private async Task<List<string>> GetVersionsFromCache(string projectShortName)
+        protected virtual DocumentWithDetailsDto CreateDocumentWithDetailsDto(Project project, Document document)
         {
-            return await _distributedCache.GetAsync(projectShortName);
+            var documentDto = ObjectMapper.Map<Document, DocumentWithDetailsDto>(document);
+            documentDto.Project = ObjectMapper.Map<Project, ProjectDto>(project);
+            documentDto.Contributors = ObjectMapper.Map<List<DocumentContributor>, List<DocumentContributorDto>>(document.Contributors);
+            return documentDto;
         }
 
-        private async Task SetVersionsToCache(string projectShortName, List<string> versions)
-        {
-            var options = new DistributedCacheEntryOptions() { SlidingExpiration = TimeSpan.FromDays(1) };
-            await _distributedCache.SetAsync(projectShortName, versions, options);
-        }
     }
 }

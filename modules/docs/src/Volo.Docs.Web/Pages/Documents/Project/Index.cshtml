@@ -1,41 +1,42 @@
 ﻿@page
 @using Microsoft.AspNetCore.Mvc.Localization
+@using Volo.Abp.AspNetCore.Mvc.UI.Layout
+@using Volo.Abp.AspNetCore.Mvc.UI.Packages.Anchor
+@using Volo.Abp.AspNetCore.Mvc.UI.Packages.Clipboard
+@using Volo.Abp.AspNetCore.Mvc.UI.Packages.MalihuCustomScrollbar
+@using Volo.Abp.AspNetCore.Mvc.UI.Packages.Popper
+@using Volo.Abp.AspNetCore.Mvc.UI.Packages.Prismjs
 @using Volo.Abp.AspNetCore.Mvc.UI.Theming
 @using Volo.Docs
 @using Volo.Docs.Localization
 @using Volo.Docs.Pages.Documents.Project
 @inject IThemeManager ThemeManager
+@inject IPageLayout PageLayout
 @inject IHtmlLocalizer<DocsResource> L
 @model IndexModel
 @{
     ViewBag.FluidLayout = true;
     Layout = ThemeManager.CurrentTheme.GetEmptyLayout();
+    PageLayout.Content.Title = Model.DocumentName?.Replace("-", " ");
 }
 @section styles {
     <abp-style-bundle name="@typeof(IndexModel).FullName">
-        <abp-style src="/Pages/Documents/vs.css" />
-        <abp-style src="/lib/prismjs/themes/prism-okaidia.css" />
-        <abp-style src="/lib/prismjs/plugins/line-highlight/prism-line-highlight.css" />
-        <abp-style src="/lib/prismjs/plugins/toolbar/prism-toolbar.css" />
-        <abp-style src="/lib/mCustomScrollbar/jquery.mCustomScrollbar.min.css" />
-        <abp-style src="/lib/bootstrap-toc/bootstrap-toc.css" />
+        <abp-script type="@typeof(PrismjsStyleBundleContributor)" />
+        <abp-script type="@typeof(MalihuCustomScrollbarPluginStyleBundleContributor)" />
+        <abp-style src="/Pages/Documents/Project/bootstrap-toc.css" />
+        <abp-style src="/Pages/Documents/Shared/Styles/vs.css" />
     </abp-style-bundle>
 }
 @section scripts {
     <abp-script-bundle name="@typeof(IndexModel).FullName">
-        <abp-script src="/lib/anchor-js/anchor.js" />
+        <abp-script type="@typeof(MalihuCustomScrollbarPluginScriptBundleContributor)" />
+        <abp-script type="@typeof(ClipboardScriptBundleContributor)" />
+        <abp-script type="@typeof(AnchorJsScriptBundleContributor)" />
+        <abp-script type="@typeof(PrismjsScriptBundleContributor)" />
+        <abp-script type="@typeof(PopperJsScriptBundleContributor)" />
+        <abp-script src="/Pages/Documents/Project/bootstrap-toc.js" />
+        <abp-script src="/Pages/Documents/Shared/Scripts/vs.js" />
         <abp-script src="/Pages/Documents/Project/index.js" />
-        <abp-script src="/lib/mCustomScrollbar/jquery.mCustomScrollbar.concat.min.js" />
-        <abp-script src="/lib/clipboard/dist/clipboard.js" />
-        <abp-script src="/lib/prismjs/prism.js" />
-        <abp-script src="/lib/prismjs/plugins/toolbar/prism-toolbar.js" />
-        <abp-script src="/lib/prismjs/plugins/show-language/prism-show-language.js" />
-        <abp-script src="/lib/prismjs/plugins/copy-to-clipboard/prism-copy-to-clipboard.js" />
-        <abp-script src="/lib/prismjs/plugins/line-highlight/prism-line-highlight.js" />
-        <abp-script src="/lib/prismjs/components/prism-csharp.js" />
-        <abp-script src="/lib/popper.js/dist/umd/popper.min.js" />
-        <abp-script src="/lib/bootstrap-toc/bootstrap-toc.js" />
-        <abp-script src="/Pages/Documents/vs.js" />
     </abp-script-bundle>
 }
 <div class="docs-page" data-spy="scroll" data-target="#docs-sticky-index">
@@ -45,10 +46,10 @@
 
                 <div class="docs-top">
                     <nav class="navbar navbar-logo">
-                        @if (!Model.ProjectName.IsNullOrWhiteSpace())
+                        @if (!Model.Project.Name.IsNullOrWhiteSpace())
                         {
-                            <a class="navbar-brand w-100" href="/">
-                                @Model.ProjectName<br>
+                            <a class="navbar-brand w-100" href="@Model.CreateVersionLink(Model.LatestVersionInfo, Model.GetSpecificVersionOrLatest())">
+                                <span id="ProjectName">@Model.Project.Name</span><br>
                                 <strong class="display-block">
                                     @L["Documents"]
                                 </strong>
@@ -57,7 +58,7 @@
 
                         @if (!Model.Document.Project.MainWebsiteUrl.IsNullOrWhiteSpace())
                         {
-                            <a href="@Model.Document.Project.MainWebsiteUrl" class="go-back-site">
+                            <a href="@Model.Document.Project.MainWebsiteUrl" class="go-back-site" id="GoToMainWebSite">
                                 <i class="fa fa-chevron-left"></i>
                                 @L["BackToWebsite"]
                             </a>
@@ -74,67 +75,206 @@
                 </div>
 
                 <div class="docs-tree-list">
-                    <div class="docs-filter">
-                        <input class="form-control" type="search" placeholder="Filter topics" aria-label="Filter">
-                        <span class="my-2 filter-icon my-sm-0">
-                            <i class="fa fa-filter"></i>
-                        </span>
-                    </div>
 
-                    @if (Model.Versions.Any())
+                    @if (Model.ShowProjectsCombobox && Model.ProjectSelectItems.Count > 1)
                     {
                         <div class="docs-version">
                             <div class="version-select">
                                 <div class="input-group">
                                     <div class="input-group-prepend">
-                                        <label class="input-group-text">@L["Version"]</label>
+                                        <label class="input-group-text">
+                                            <i class="fa fa-folder-open" aria-hidden="true" data-toggle="tooltip" title="@L["Project"]"></i>
+                                        </label>
                                     </div>
 
-                                    <select asp-items="Model.VersionSelectItems" class="form-control" onchange="window.location.replace(this.value)"></select>
+                                    <select asp-items="Model.ProjectSelectItems" class="form-control" onchange="window.location.pathname = this.value"></select>
                                 </div>
                             </div>
                         </div>
                     }
 
-                    <ul root-node="@Model.Navigation.RootNode"
-                        version="@(Model.LatestVersionInfo.IsSelected ? DocsAppConsts.LatestVersion : Model.Version)"
-                        project-name="@Model.ProjectName"
-                        project-format="@Model.ProjectFormat"
-                        selected-document-name="@Model.DocumentNameWithExtension"
-                        id="sidebar-scroll"
-                        class="nav nav-list"></ul>
+                    <div class="row">
+                        @if (Model.VersionSelectItems.Any())
+                        {
+                            <div class="col @(Model.LanguageSelectListItems.Count > 1?"pr-0":"")">
+                                <div class="docs-version @(Model.LanguageSelectListItems.Count > 1?"pr-1":"")">
+                                    <div class="version-select">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <label class="input-group-text">
+                                                    <i class="fa fa-check-square-o" aria-hidden="true" data-toggle="tooltip" title="@L["Version"]"></i>
+                                                </label>
+                                            </div>
+
+                                            <select asp-items="Model.VersionSelectItems" class="form-control" onchange="if (this.value) { window.location.replace(this.value) }"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (Model.LanguageSelectListItems.Count > 1)
+                        {
+                            <div class="col  @(Model.VersionSelectItems.Any()?"pl-0":"")">
+                                <div class="docs-version docs-language @(Model.VersionSelectItems.Any()?"pl-1":"")">
+                                    <div class="version-select">
+                                        <div class="input-group">
+                                            <div class="input-group-prepend">
+                                                <label class="input-group-text">
+                                                    <i class="fa fa-globe" aria-hidden="true" data-toggle="tooltip" title="@L["Language"]"></i>
+                                                </label>
+                                            </div>
+                                            <select asp-items="Model.LanguageSelectListItems" class="form-control" onchange="window.location.replace(this.value)"></select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="docs-version mb-4">
+                        <div class="version-select">
+                            <div class="input-group">
+                                <div class="input-group-prepend">
+                                    <label class="input-group-text"><i class="fa fa-filter"></i></label>
+                                </div>
+
+                                <input class="form-control" type="search" placeholder="@L["FilterTopics"].Value" aria-label="Filter">
+                            </div>
+                        </div>
+                    </div>
+
+
+                    @if (Model.Navigation == null || Model.Navigation.Content.IsNullOrEmpty())
+                    {
+                        <div class="text-muted p-3">
+                            <i class="fa fa-warning"></i> @L["NavigationDocumentNotFound"]
+                        </div>
+                    }
+                    else
+                    {
+                        <ul root-node="@Model.Navigation.RootNode"
+                            version="@(Model.LatestVersionInfo == null || Model.LatestVersionInfo.IsSelected ? DocsAppConsts.Latest : Model.Version)"
+                            project-name="@Model.ProjectName"
+                            project-format="@Model.Project.Format"
+                            selected-document-name="@Model.DocumentNameWithExtension"
+                            language="@Model.LanguageCode"
+                            id="sidebar-scroll"
+                            class="nav nav-list"></ul>
+                    }
                 </div>
 
             </div>
         </div>
 
-        @if (Model.Document.SuccessfullyRetrieved)
+        @if (Model.Document != null)
         {
-
             <div class="col-md-7 docs-content bg-white">
-
                 <div class="docs-link-btns">
-                    @if (!string.IsNullOrEmpty(Model.Document.EditLink))
-                    {
-                        <a href="@Model.Document.EditLink" target="_blank"> <i class="fa fa-edit"></i> @L["Edit"]</a>
-                    }
+                    <div class="float-left">
+                        @(L["ShareOn"].Value + " :")
+                        <a href="#" target="_blank" class="share-button twitter" id="TwitterShareLink" title="Twitter">
+                            <i class="fa fa-twitter"></i>
+                        </a>
+                        <a href="#" target="_blank" class="share-button linkedin" id="LinkedinShareLink" title="LinkedIn">
+                            <i class="fa fa-linkedin"></i>
+                        </a>
+                        <a href="#" target="_blank" class="share-button email" id="EmailShareLink" title="E-mail">
+                            <i class="fa fa-envelope-square"></i>
+                        </a>
+                    </div>
+
+                    <div class="float-right">
+                        @if (!string.IsNullOrEmpty(Model.Document.EditLink))
+                        {
+                            <a href="@Model.Document.EditLink" target="_blank"> <i class="fa fa-edit"></i> @L["Edit"]</a>
+                        }
+                    </div>
                 </div>
 
                 <div class="docs-content-field">
                     <div class="docs-text-field">
+                        <div class="position-relative">
+                            @if (Model.Document.Contributors != null && Model.Document.Contributors.Count > 0)
+                            {
+                                <div class="contributors">
+                                    <small class="text-muted">@(L["Contributors"].Value + " :")</small>
+                                    @foreach (var contributor in Model.Document.Contributors)
+                                    {
+                                        <a href="@contributor.UserProfileUrl" target="_blank">
+                                            <img src="@contributor.AvatarUrl"
+                                                 class="contributors-avatar" height="21" width="21" title="@contributor.Username" />
+                                        </a>
+                                    }
+                                </div>
+                            }
+
+                            @if (Model.DocumentPreferences != null && Model.DocumentPreferences.Parameters != null && Model.DocumentPreferences.Parameters.Any())
+                            {
+                                <div class="alert alert-primary alert-criteria">
+                                    <abp-row>
+                                        <abp-column>
+                                            <p class="alert-p mb-2">
+                                                <i class="fa fa-info-circle"></i>
+                                                @L["MultipleVersionDocumentInfo"]
+                                            </p>
+                                        </abp-column>
+                                    </abp-row>
+                                    <abp-form-row>
+                                        @foreach (var parameter in Model.DocumentPreferences.Parameters)
+                                        {
+                                            <abp-column size="_4">
+                                                <div class="input-group">
+                                                    <div class="input-group-prepend">
+                                                        <span class="input-group-text" id="@("Section" + parameter.Name + "ComboboxAddonId")">@(parameter.DisplayName)</span>
+                                                    </div>
+                                                    <select class="doc-section-combobox form-control"
+                                                            aria-describedby="@("Section" + parameter.Name + "ComboboxAddonId")"
+                                                            id="@("Section" + parameter.Name + "ComboboxId")" data-key="@parameter.Name">
+                                                        @foreach (var value in parameter.Values)
+                                                        {
+                                                            @if (value.Key == (Model.UserPreferences.ContainsKey(parameter.Name) ? Model.UserPreferences[parameter.Name] : null))
+                                                            {
+                                                                <option value="@value.Key" selected="selected">@value.Value</option>
+                                                            }
+                                                            else
+                                                            {
+                                                                <option value="@value.Key">@value.Value</option>
+                                                            }
+                                                        }
+                                                    </select>
+                                                </div>
+                                            </abp-column>
+                                        }
+                                    </abp-form-row>
+                                </div>
+                            }
+                        </div>
+
                         <div data-spy="scroll" data-target="#docs-sticky-index" data-offset="0">
                             <article class="docs-body">
+
+                                @if (Model.DocumentLanguageIsDifferent)
+                                {
+                                    <abp-alert alert-type="Warning" dismissible="true" class="mb-0">
+                                        @L["DocumentNotFoundInSelectedLanguage"]
+                                    </abp-alert>
+                                }
                                 @Html.Raw(Model.Document.Content)
                             </article>
+
+                            <div id="crawler_link" style="display:none;">
+
+                            </div>
                         </div>
                     </div>
                 </div>
-
             </div>
 
             <div class="col-md-2 docs-page-index position-relative bg-light">
 
                 <div id="scroll-index" class="docs-inner-anchors mt-2">
+
                     <h5>@L["InThisDocument"]</h5>
                     <nav id="docs-sticky-index" class="navbar index-scroll">
                     </nav>
@@ -163,3 +303,4 @@
 
     </div>
 </div>
+

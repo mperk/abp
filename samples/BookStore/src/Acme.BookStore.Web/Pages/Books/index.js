@@ -6,34 +6,40 @@
     var editModal = new abp.ModalManager(abp.appPath + 'Books/EditModal');
 
     var dataTable = $('#BooksTable').DataTable(abp.libs.datatables.normalizeConfiguration({
+        processing: true,
+        serverSide: true,
+        paging: true,
+        searching: false,
+        autoWidth: false,
+        scrollCollapse: true,
         order: [[1, "asc"]],
         ajax: abp.libs.datatables.createAjax(acme.bookStore.book.getList),
         columnDefs: [
             {
                 rowAction: {
                     items:
-                    [
-                        {
-                            text: l('Edit'),
-                            action: function (data) {
-                                editModal.open({ id: data.record.id });
-                            }
-                        },
-                        {
-                            text: l('Delete'),
-                            confirmMessage: function (data) {
-                                return l('BookDeletionConfirmationMessage', data.record.name);
+                        [
+                            {
+                                text: l('Edit'),
+                                action: function (data) {
+                                    editModal.open({ id: data.record.id });
+                                }
                             },
-                            action: function (data) {
-                                acme.bookStore.book
-                                    .delete(data.record.id)
-                                    .then(function() {
-                                        abp.notify.info(l('SuccessfullyDeleted'));
-                                        dataTable.ajax.reload();
-                                    });
+                            {
+                                text: l('Delete'),
+                                confirmMessage: function (data) {
+                                    return l('BookDeletionConfirmationMessage', data.record.name);
+                                },
+                                action: function (data) {
+                                    acme.bookStore.book
+                                        .delete(data.record.id)
+                                        .then(function () {
+                                            abp.notify.info(l('SuccessfullyDeleted'));
+                                            dataTable.ajax.reload();
+                                        });
+                                }
                             }
-                        }
-                    ]
+                        ]
                 }
             },
             { data: "name" },

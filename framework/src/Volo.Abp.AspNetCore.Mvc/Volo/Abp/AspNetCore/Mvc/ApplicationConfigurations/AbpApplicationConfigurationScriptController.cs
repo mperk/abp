@@ -3,6 +3,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Volo.Abp.Auditing;
+using Volo.Abp.Http;
 using Volo.Abp.Json;
 
 namespace Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations
@@ -12,23 +13,26 @@ namespace Volo.Abp.AspNetCore.Mvc.ApplicationConfigurations
     [DisableAuditing]
     public class AbpApplicationConfigurationScriptController : AbpController
     {
-        private readonly IApplicationConfigurationBuilder _configurationBuilder;
+        private readonly IAbpApplicationConfigurationAppService _configurationAppService;
         private readonly IJsonSerializer _jsonSerializer;
 
         public AbpApplicationConfigurationScriptController(
-            IApplicationConfigurationBuilder configurationBuilder,
+            IAbpApplicationConfigurationAppService configurationAppService,
             IJsonSerializer jsonSerializer)
         {
-            _configurationBuilder = configurationBuilder;
+            _configurationAppService = configurationAppService;
             _jsonSerializer = jsonSerializer;
         }
 
         [HttpGet]
-        [Produces("text/javascript", "text/plain")]
-        public async Task<string> Get()
+        [Produces(MimeTypes.Application.Javascript, MimeTypes.Text.Plain)]
+        public async Task<ActionResult> Get()
         {
-            return CreateAbpExtendScript(
-                await _configurationBuilder.GetAsync()
+            return Content(
+                CreateAbpExtendScript(
+                    await _configurationAppService.GetAsync()
+                ),
+                MimeTypes.Application.Javascript
             );
         }
 

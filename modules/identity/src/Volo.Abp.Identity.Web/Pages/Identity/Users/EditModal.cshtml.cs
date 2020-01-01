@@ -4,11 +4,11 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
-using Volo.Abp.AspNetCore.Mvc.UI.RazorPages;
+using Volo.Abp.Domain.Entities;
 
 namespace Volo.Abp.Identity.Web.Pages.Identity.Users
 {
-    public class EditModalModel : AbpPageModel
+    public class EditModalModel : IdentityPageModel
     {
         [BindProperty]
         public UserInfoViewModel UserInfo { get; set; }
@@ -29,8 +29,8 @@ namespace Volo.Abp.Identity.Web.Pages.Identity.Users
         {
             UserInfo = ObjectMapper.Map<IdentityUserDto, UserInfoViewModel>(await _identityUserAppService.GetAsync(id));
 
-            Roles = ObjectMapper.Map<List<IdentityRoleDto>, AssignedRoleViewModel[]>(
-                await _identityRoleAppService.GetAllListAsync()
+            Roles = ObjectMapper.Map<IReadOnlyList<IdentityRoleDto>, AssignedRoleViewModel[]>(
+                (await _identityRoleAppService.GetListAsync()).Items
             );
 
             var userRoleNames = (await _identityUserAppService.GetRolesAsync(UserInfo.Id)).Items.Select(r => r.Name).ToList();
@@ -54,14 +54,27 @@ namespace Volo.Abp.Identity.Web.Pages.Identity.Users
             return NoContent();
         }
 
-        public class UserInfoViewModel
+        public class UserInfoViewModel : IHasConcurrencyStamp
         {
             [HiddenInput]
             public Guid Id { get; set; }
 
+            [HiddenInput]
+            public string ConcurrencyStamp { get; set; }
+
             [Required]
             [StringLength(IdentityUserConsts.MaxUserNameLength)]
             public string UserName { get; set; }
+
+            [StringLength(IdentityUserConsts.MaxNameLength)]
+            public string Name { get; set; }
+
+            [StringLength(IdentityUserConsts.MaxSurnameLength)]
+            public string Surname { get; set; }
+
+            [StringLength(IdentityUserConsts.MaxPasswordLength)]
+            [DataType(DataType.Password)]
+            public string Password { get; set; }
 
             [Required]
             [EmailAddress]

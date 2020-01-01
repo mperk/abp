@@ -3,30 +3,18 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using Volo.Abp.Application.Dtos;
-using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Entities;
 using Volo.Blogging.Blogs.Dtos;
 
 namespace Volo.Blogging.Blogs
 {
-    public class BlogAppService : ApplicationService, IBlogAppService
+    public class BlogAppService : BloggingAppServiceBase, IBlogAppService
     {
         private readonly IBlogRepository _blogRepository;
 
         public BlogAppService(IBlogRepository blogRepository)
         {
             _blogRepository = blogRepository;
-        }
-
-        public async Task<PagedResultDto<BlogDto>> GetListPagedAsync(PagedAndSortedResultRequestDto input)
-        {
-            var blogs = await _blogRepository.GetListAsync(input.Sorting, input.MaxResultCount, input.SkipCount );
-
-            var totalCount = await _blogRepository.GetTotalBlogCount();
-
-            var dtos = ObjectMapper.Map<List<Blog>, List<BlogDto>>(blogs);
-
-            return new PagedResultDto<BlogDto>(totalCount, dtos);
         }
 
         public async Task<ListResultDto<BlogDto>> GetListAsync()

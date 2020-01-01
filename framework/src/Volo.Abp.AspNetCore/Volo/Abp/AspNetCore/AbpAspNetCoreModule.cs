@@ -31,14 +31,13 @@ namespace Volo.Abp.AspNetCore
     {
         public override void ConfigureServices(ServiceConfigurationContext context)
         {
-            context.Services.Configure<AbpAuditingOptions>(options =>
+            Configure<AbpAuditingOptions>(options =>
             {
                 options.Contributors.Add(new AspNetCoreAuditLogContributor());
             });
 
             AddAspNetServices(context.Services);
             context.Services.AddObjectAccessor<IApplicationBuilder>();
-            context.Services.AddConfiguration();
         }
 
         private static void AddAspNetServices(IServiceCollection services)

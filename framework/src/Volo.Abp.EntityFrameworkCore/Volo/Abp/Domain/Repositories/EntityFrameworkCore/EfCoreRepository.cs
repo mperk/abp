@@ -23,20 +23,20 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
         protected virtual TDbContext DbContext => _dbContextProvider.GetDbContext();
 
-        protected virtual EntityOptions<TEntity> EntityOptions => _entityOptionsLazy.Value;
+        protected virtual AbpEntityOptions<TEntity> AbpEntityOptions => _entityOptionsLazy.Value;
 
         private readonly IDbContextProvider<TDbContext> _dbContextProvider;
-        private readonly Lazy<EntityOptions<TEntity>> _entityOptionsLazy;
+        private readonly Lazy<AbpEntityOptions<TEntity>> _entityOptionsLazy;
 
         public EfCoreRepository(IDbContextProvider<TDbContext> dbContextProvider)
         {
             _dbContextProvider = dbContextProvider;
 
-            _entityOptionsLazy = new Lazy<EntityOptions<TEntity>>(
+            _entityOptionsLazy = new Lazy<AbpEntityOptions<TEntity>>(
                 () => ServiceProvider
-                          .GetRequiredService<IOptions<EntityOptions>>()
+                          .GetRequiredService<IOptions<AbpEntityOptions>>()
                           .Value
-                          .GetOrNull<TEntity>() ?? EntityOptions<TEntity>.Empty
+                          .GetOrNull<TEntity>() ?? AbpEntityOptions<TEntity>.Empty
             );
         }
         
@@ -86,7 +86,7 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
             if (autoSave)
             {
-                await DbContext.SaveChangesAsync(cancellationToken);
+                await DbContext.SaveChangesAsync(GetCancellationToken(cancellationToken));
             }
 
             return updatedEntity;
@@ -108,7 +108,7 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
             if (autoSave)
             {
-                await DbContext.SaveChangesAsync(cancellationToken);
+                await DbContext.SaveChangesAsync(GetCancellationToken(cancellationToken));
             }
         }
 
@@ -122,8 +122,8 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
         public override async Task<List<TEntity>> GetListAsync(bool includeDetails = false, CancellationToken cancellationToken = default)
         {
             return includeDetails
-                ? await WithDetails().ToListAsync(cancellationToken)
-                : await DbSet.ToListAsync(cancellationToken);
+                ? await WithDetails().ToListAsync(GetCancellationToken(cancellationToken))
+                : await DbSet.ToListAsync(GetCancellationToken(cancellationToken));
         }
 
         public override long GetCount()
@@ -133,7 +133,7 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
         public override async Task<long> GetCountAsync(CancellationToken cancellationToken = default)
         {
-            return await DbSet.LongCountAsync(cancellationToken);
+            return await DbSet.LongCountAsync(GetCancellationToken(cancellationToken));
         }
 
         protected override IQueryable<TEntity> GetQueryable()
@@ -153,7 +153,10 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
         public override async Task DeleteAsync(Expression<Func<TEntity, bool>> predicate, bool autoSave = false, CancellationToken cancellationToken = default)
         {
-            var entities = await GetQueryable().Where(predicate).ToListAsync(GetCancellationToken(cancellationToken));
+            var entities = await GetQueryable()
+                .Where(predicate)
+                .ToListAsync(GetCancellationToken(cancellationToken));
+
             foreach (var entity in entities)
             {
                 DbSet.Remove(entity);
@@ -161,7 +164,7 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
 
             if (autoSave)
             {
-                await DbContext.SaveChangesAsync(cancellationToken);
+                await DbContext.SaveChangesAsync(GetCancellationToken(cancellationToken));
             }
         }
 
@@ -171,7 +174,10 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
             CancellationToken cancellationToken = default)
             where TProperty : class
         {
-            await DbContext.Entry(entity).Collection(propertyExpression).LoadAsync(GetCancellationToken(cancellationToken));
+            await DbContext
+                .Entry(entity)
+                .Collection(propertyExpression)
+                .LoadAsync(GetCancellationToken(cancellationToken));
         }
 
         public virtual async Task EnsurePropertyLoadedAsync<TProperty>(
@@ -180,17 +186,20 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
             CancellationToken cancellationToken = default)
             where TProperty : class
         {
-            await DbContext.Entry(entity).Reference(propertyExpression).LoadAsync(GetCancellationToken(cancellationToken));
+            await DbContext
+                .Entry(entity)
+                .Reference(propertyExpression)
+                .LoadAsync(GetCancellationToken(cancellationToken));
         }
 
         public override IQueryable<TEntity> WithDetails()
         {
-            if (EntityOptions.DefaultWithDetailsFunc == null)
+            if (AbpEntityOptions.DefaultWithDetailsFunc == null)
             {
                 return base.WithDetails();
             }
 
-            return EntityOptions.DefaultWithDetailsFunc(GetQueryable());
+            return AbpEntityOptions.DefaultWithDetailsFunc(GetQueryable());
         }
 
         public override IQueryable<TEntity> WithDetails(params Expression<Func<TEntity, object>>[] propertySelectors)
@@ -249,14 +258,14 @@ namespace Volo.Abp.Domain.Repositories.EntityFrameworkCore
         public virtual TEntity Find(TKey id, bool includeDetails = true)
         {
             return includeDetails
-                ? WithDetails().FirstOrDefault(EntityHelper.CreateEqualityExpressionForId<TEntity, TKey>(id))
+                ? WithDetails().FirstOrDefault(e => e.Id.Equals(id))
                 : DbSet.Find(id);
         }
 
         public virtual async Task<TEntity> FindAsync(TKey id, bool includeDetails = true, CancellationToken cancellationToken = default)
         {
             return includeDetails
-                ? await WithDetails().FirstOrDefaultAsync(EntityHelper.CreateEqualityExpressionForId<TEntity, TKey>(id), GetCancellationToken(cancellationToken))
+                ? await WithDetails().FirstOrDefaultAsync(e => e.Id.Equals(id), GetCancellationToken(cancellationToken))
                 : await DbSet.FindAsync(new object[] { id }, GetCancellationToken(cancellationToken));
         }
 

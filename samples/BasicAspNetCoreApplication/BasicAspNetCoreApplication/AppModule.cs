@@ -1,8 +1,6 @@
 ﻿using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Volo.Abp;
-using Volo.Abp.AspNetCore.Modularity;
 using Volo.Abp.AspNetCore.Mvc;
 using Volo.Abp.Autofac;
 using Volo.Abp.Modularity;
@@ -10,16 +8,9 @@ using Volo.Abp.Modularity;
 namespace BasicAspNetCoreApplication
 {
     [DependsOn(typeof(AbpAspNetCoreMvcModule))]
-    [DependsOn(typeof(AbpAutofacModule))]
+    [DependsOn(typeof(AbpAutofacModule))] //Add dependency to ABP Autofac module
     public class AppModule : AbpModule
     {
-        public override void ConfigureServices(ServiceConfigurationContext context)
-        {
-            context.Services.AddMvc();
-
-            context.Services.AddAssemblyOf<AppModule>();
-        }
-
         public override void OnApplicationInitialization(ApplicationInitializationContext context)
         {
             var app = context.GetApplicationBuilder();
@@ -29,8 +20,14 @@ namespace BasicAspNetCoreApplication
             {
                 app.UseDeveloperExceptionPage();
             }
+            else
+            {
+                app.UseExceptionHandler("/Error");
+            }
 
-            app.UseMvcWithDefaultRoute();
+            app.UseStaticFiles();
+            app.UseRouting();
+            app.UseMvcWithDefaultRouteAndArea();
         }
     }
 }
